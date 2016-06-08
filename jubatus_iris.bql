@@ -1,0 +1,39 @@
+-- STATE (分類器) を定義する
+CREATE STATE iris_classifier TYPE jubaclassifier_arow WITH label_field = "Species", feature_vector_field = "Features", regularization_weight = 0.001;
+
+-- ----------------- 学習処理 -----------------
+
+-- 学習用の SOURCE (Iris データセット) を定義する
+CREATE PAUSED SOURCE iris TYPE file WITH path = "iris.jsonl";
+
+-- 学習用の SINK を定義する
+CREATE SINK iris_classifier_sink TYPE uds WITH name = "iris_classifier";
+
+-- SOURCE を SINK に流すよう定義する
+INSERT INTO iris_classifier_sink FROM iris;
+
+-- SOURCE を開始する (学習処理を行う)
+RESUME SOURCE iris;
+
+-- ... ちょっと待つ ...
+
+-- ----------------- 分析処理 -----------------
+
+-- (デバッグ用) 学習していることを単純なデータで確認してみる
+--EVAL jubaclassify("iris_classifier", {"SepalLength":1.0});
+
+-- 分析用の SOURCE (Iris データセット) を定義する
+CREATE PAUSED SOURCE iris_analysis TYPE file WITH path = "iris.jsonl";
+
+-- SOURCE と STATE を繋ぐ STREAM を定義する
+CREATE STREAM labeled_iris AS
+    SELECT RSTREAM *, juba_classified_label(jubaclassify("iris_classifier", Features)) AS EstimatedSpecies FROM iris_analysis [RANGE 1 TUPLES];
+
+-- 結果をファイル出力する SINK を定義する
+CREATE SINK classification_result TYPE file WITH path = "result.jsonl";
+
+-- STREAM と SINK を繋ぐ
+INSERT INTO classification_result FROM labeled_iris;
+
+-- SOURCE を開始する (分析処理を行う)
+RESUME SOURCE iris_analysis;

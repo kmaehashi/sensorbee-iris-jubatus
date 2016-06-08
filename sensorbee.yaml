@@ -1,0 +1,4 @@
+topologies:
+  jubatus_iris:
+    bql_file: jubatus_iris.bql
+
